@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/profile_service.dart';
 import 'auth_page.dart';
 import 'home_page.dart';
+import 'profile_setup_page.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -45,7 +47,29 @@ class _SplashScreenState extends State<SplashScreen>
       box.put('id', session.user.id);
       box.put('email', session.user.email);
       box.put('name', session.user.userMetadata?['full_name']);
-      _go(const HomePage());
+      // fetch profile from Supabase
+      ProfileRecord? profile;
+      try {
+        profile = await ProfileService.fetchProfile(session.user.id);
+      } catch (e) {
+        profile = null;
+      }
+      // Navigate based on profile existence
+      if (profile != null) {
+        box.put('role', profile.role);
+        box.put('profileComplete', true);
+        _go(const HomePage());
+      } else {
+        box.put('profileComplete', false);
+        box.delete('role');
+        _go(
+          ProfileSetupPage(
+            userId: session.user.id,
+            email: session.user.email,
+            name: session.user.userMetadata?['full_name'],
+          ),
+        );
+      }
       return;
     }
 
@@ -76,59 +100,23 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [colors.primaryContainer, colors.primary, colors.secondary],
+            colors: [Color(0xFFF7F9FF), Color(0xFFFFF1F5)],
           ),
         ),
         child: Center(
           child: ScaleTransition(
             scale: _scale,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 96,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: colors.onPrimary,
-                    boxShadow: [
-                      BoxShadow(
-                        color: colors.onPrimaryContainer.withOpacity(0.25),
-                        blurRadius: 24,
-                        offset: const Offset(0, 12),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.event_available,
-                    size: 48,
-                    color: colors.primary,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Attender',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.headlineMedium?.copyWith(color: colors.onPrimary),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Track attendance beautifully',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(color: colors.onPrimary),
-                ),
-                const SizedBox(height: 24),
-                const CircularProgressIndicator.adaptive(),
-              ],
+            child: Image.asset(
+              'lib/images/attender_icon.png',
+              width: 120,
+              height: 120,
+              filterQuality: FilterQuality.high,
             ),
           ),
         ),

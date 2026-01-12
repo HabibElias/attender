@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/splash_screen.dart';
@@ -31,12 +32,18 @@ class AttenderApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final baseTextTheme = GoogleFonts.poppinsTextTheme();
     final theme = ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4F46E5)),
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0E58BC)),
       useMaterial3: true,
-      textTheme: const TextTheme(
-        headlineMedium: TextStyle(fontWeight: FontWeight.bold),
-        titleMedium: TextStyle(fontWeight: FontWeight.w600),
+      fontFamily: GoogleFonts.poppins().fontFamily,
+      textTheme: baseTextTheme.copyWith(
+        headlineMedium: baseTextTheme.headlineMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+        titleMedium: baseTextTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
 
