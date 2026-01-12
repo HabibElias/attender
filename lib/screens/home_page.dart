@@ -12,6 +12,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   String? email;
   String? name;
+  String? role;
 
   @override
   void initState() {
@@ -24,6 +25,7 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       email = box.get('email') as String?;
       name = box.get('name') as String?;
+      role = box.get('role') as String?;
     });
   }
 
@@ -62,6 +64,10 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 6),
               Text(email ?? 'Email not available'),
+              if (role != null) ...[
+                const SizedBox(height: 6),
+                Text('Role: $role'),
+              ],
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: _signOut,

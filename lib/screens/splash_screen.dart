@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/profile_service.dart';
 import 'auth_page.dart';
 import 'home_page.dart';
+import 'profile_setup_page.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -45,7 +47,30 @@ class _SplashScreenState extends State<SplashScreen>
       box.put('id', session.user.id);
       box.put('email', session.user.email);
       box.put('name', session.user.userMetadata?['full_name']);
-      _go(const HomePage());
+      print('Fetching profile for user ${session.user.id}');
+      ProfileRecord? profile;
+      try {
+        profile = await ProfileService.fetchProfile(session.user.id);
+      } catch (e) {
+        print('Error fetching profile: $e');
+        profile = null;
+      }
+      print('Fetched profile: $profile');
+      if (profile != null) {
+        box.put('role', profile.role);
+        box.put('profileComplete', true);
+        _go(const HomePage());
+      } else {
+        box.put('profileComplete', false);
+        box.delete('role');
+        _go(
+          ProfileSetupPage(
+            userId: session.user.id,
+            email: session.user.email,
+            name: session.user.userMetadata?['full_name'],
+          ),
+        );
+      }
       return;
     }
 

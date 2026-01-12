@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/profile_service.dart';
 import 'home_page.dart';
+import 'profile_setup_page.dart';
 import 'sign_up_page.dart';
 
 class AuthPage extends StatefulWidget {
@@ -16,9 +20,25 @@ class _AuthPageState extends State<AuthPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _loading = false;
+  bool _navigated = false;
+  StreamSubscription<AuthState>? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen(
+      (data) async {
+        final session = data.session;
+        if (session == null || _navigated) return;
+        setState(() => _loading = false);
+        await _handleSession(session);
+      },
+    );
+  }
 
   @override
   void dispose() {
+    _authSub?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -40,8 +60,7 @@ class _AuthPageState extends State<AuthPage> {
       );
       final session = res.session;
       if (session != null) {
-        await _persistUser(session);
-        _goHome();
+        await _handleSession(session);
       } else {
         _showSnack('Sign-in failed');
       }
@@ -65,8 +84,7 @@ class _AuthPageState extends State<AuthPage> {
       // OAuth flow may complete via deep link; listen for auth state changes too.
       final session = Supabase.instance.client.auth.currentSession;
       if (session != null) {
-        await _persistUser(session);
-        _goHome();
+        await _handleSession(session);
       } else {
         _showSnack('Complete Google sign-in in browser...');
       }
@@ -83,6 +101,38 @@ class _AuthPageState extends State<AuthPage> {
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const HomePage()),
+      (route) => false,
+    );
+  }
+
+  Future<void> _handleSession(Session session) async {
+    if (_navigated) return;
+    _navigated = true;
+    await _persistUser(session);
+    final profile = await ProfileService.fetchProfile(session.user.id);
+    final box = await Hive.openBox('userBox');
+    if (profile != null) {
+      box.put('role', profile.role);
+      box.put('profileComplete', true);
+      _goHome();
+    } else {
+      box.put('profileComplete', false);
+      box.delete('role');
+      _goProfileSetup(
+        session.user.id,
+        session.user.email,
+        session.user.userMetadata?['full_name'],
+      );
+    }
+  }
+
+  void _goProfileSetup(String userId, String? email, String? name) {
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) =>
+            ProfileSetupPage(userId: userId, email: email, name: name),
+      ),
       (route) => false,
     );
   }

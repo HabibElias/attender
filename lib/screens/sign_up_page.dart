@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/profile_service.dart';
 import 'home_page.dart';
+import 'profile_setup_page.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -61,8 +63,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
       final session = res.session;
       if (session != null) {
-        await _persistUser(session);
-        _goHome();
+        await _handleSession(session);
       } else {
         // If email confirmation is enabled, session may be null
         _showSnack('Check your email to confirm your account.');
@@ -80,6 +81,36 @@ class _SignUpPageState extends State<SignUpPage> {
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const HomePage()),
+      (route) => false,
+    );
+  }
+
+  Future<void> _handleSession(Session session) async {
+    await _persistUser(session);
+    final profile = await ProfileService.fetchProfile(session.user.id);
+    final box = await Hive.openBox('userBox');
+    if (profile != null) {
+      box.put('role', profile.role);
+      box.put('profileComplete', true);
+      _goHome();
+    } else {
+      box.put('profileComplete', false);
+      box.delete('role');
+      _goProfileSetup(
+        session.user.id,
+        session.user.email,
+        session.user.userMetadata?['full_name'],
+      );
+    }
+  }
+
+  void _goProfileSetup(String userId, String? email, String? name) {
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) =>
+            ProfileSetupPage(userId: userId, email: email, name: name),
+      ),
       (route) => false,
     );
   }
