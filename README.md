@@ -1,16 +1,31 @@
-# attender_new
+# Attender
 
-A new Flutter project.
+Flutter app for attendance tracking with Supabase auth, role-based onboarding, and a polished Poppins-forward UI.
 
-## Getting Started
+## Features
+- Supabase email/password and Google OAuth sign-in/sign-up.
+- Onboarding flow: splash → auth → role-based profile setup (student/teacher) → home.
+- Hive local storage for session/user cache.
+- Theming with primary color `#0E58BC`, gradient auth screens, branded splash logo.
 
-This project is a starting point for a Flutter application.
+## Prerequisites
+- Flutter 3.10+ and Dart 3.10+.
+- Supabase project with URL and anon key.
 
-A few resources to get you started if this is your first Flutter project:
+## Setup
+1) Install dependencies: `flutter pub get`.
+2) Create a `.env` file at project root with:
+	```
+	SUPABASE_URL=your-url
+	SUPABASE_KEY=your-anon-key
+	```
+3) Ensure assets are available (logo at `lib/images/attender_icon.png`).
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Run
+- Debug: `flutter run`
+- Build Android: `flutter build apk`
+- Build iOS: `flutter build ios` (on macOS)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Notes
+- If Supabase email confirmation is enabled, sign-up may require email verification.
+- Role selection is stored locally in Hive and in Supabase via `ProfileService`.
