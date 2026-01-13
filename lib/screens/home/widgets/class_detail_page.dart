@@ -4,6 +4,7 @@ import 'package:hive_flutter/adapters.dart';
 import '../../../services/class_service.dart';
 import 'class_icon_helper.dart';
 import 'edit_class_sheet.dart';
+import 'add_students_page.dart';
 
 class ClassDetailPage extends StatefulWidget {
   const ClassDetailPage({
@@ -33,6 +34,7 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
   late String _className;
   String? _classIcon;
   late String _teacherId;
+  List<StudentRecord> _addedStudents = [];
 
   @override
   void initState() {
@@ -41,6 +43,11 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
     _classIcon = widget.classIcon;
     _teacherId = widget.teacherId ?? '';
     _load();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -52,13 +59,43 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
       final scheds = await widget.classService.fetchClassSchedules(
         widget.classId,
       );
+      List<StudentRecord> students = [];
+      try {
+        // Use dynamic to avoid compile-time error if the service doesn't declare fetchClassStudents.
+        final res = await (widget.classService as dynamic).fetchClassStudents(
+          widget.classId,
+        );
+        if (res is List<StudentRecord>) {
+          students = res;
+        } else if (res is List) {
+          students = res.cast<StudentRecord>();
+        }
+      } catch (e) {
+        // Service may not implement fetchClassStudents or the call failed; fall back to empty list.
+        students = [];
+      }
       if (!mounted) return;
-      setState(() => _schedules = scheds);
+      setState(() {
+        _schedules = scheds;
+        _addedStudents = students;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _navigateToAddStudents() async {
+    final result = await showAddStudentsSheet(
+      context: context,
+      classService: widget.classService,
+      classId: widget.classId,
+    );
+
+    if (result == true) {
+      _load(); // Reload to refresh students list after adding
     }
   }
 
@@ -266,6 +303,28 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
+                              'Students',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 10),
+                            if (_addedStudents.isEmpty)
+                              Text('No students added yet.'),
+                            for (var student in _addedStudents)
+                              ListTile(
+                                title: Text(student.name),
+                                subtitle: Text(student.email ?? ''),
+                              ),
+                            const SizedBox(height: 10),
+                          ],
+                        ),
+                      const SizedBox(height: 18),
+                      if (box.get('role') == 'teacher' &&
+                          box.get('sessionUser')['id'] == _teacherId)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
                               "Actions",
                               style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.w700),
@@ -274,6 +333,25 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                             Row(
                               spacing: 12,
                               children: [
+                                ElevatedButton.icon(
+                                  onPressed: _navigateToAddStudents,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: accentColor,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.person_add_alt_1,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Add Students'),
+                                ),
                                 ElevatedButton.icon(
                                   onPressed: _openEditSheet,
                                   style: ElevatedButton.styleFrom(

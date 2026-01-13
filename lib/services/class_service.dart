@@ -185,6 +185,77 @@ class ClassService {
   Future<void> deleteClass(int classId) async {
     await client.from('classes').delete().eq('id', classId);
   }
+
+  // Search students via DB function search_students
+  Future<List<StudentRecord>> searchStudents(String query) async {
+    final rows = await client.rpc('search_students', params: {'query': query});
+
+    return (rows as List<dynamic>)
+        .map(
+          (row) => StudentRecord(
+            id: row['id'] as String,
+            name: (row['name'] as String?) ?? 'Unnamed',
+            email: row['email'] as String?,
+          ),
+        )
+        .toList();
+  }
+
+  // Add a student to a class (class_students junction table)
+  Future<void> addStudentToClass({
+    required AddStudentToClassParams params,
+  }) async {
+    final user = client.auth.currentUser;
+    if (user == null) {
+      throw StateError('Not authenticated');
+    }
+
+    final existing = await client
+        .from('class_students')
+        .select()
+        .eq('class_id', params.classId)
+        .eq('student_id', params.studentId)
+        .maybeSingle();
+
+    if (existing != null) {
+      // Student already added to class, no action needed
+      return;
+    }
+
+    final response = await client
+        .from('class_students')
+        .insert({'class_id': params.classId, 'student_id': params.studentId})
+        .select()
+        .maybeSingle();
+
+    if (response == null) {
+      throw Exception('Failed to add student to class');
+    }
+  }
+
+  Future<List<StudentRecord>> fetchClassStudents(int classId) async {
+    final rows = await client.rpc(
+      'get_class_students',
+      params: {'p_class_id': classId},
+    );
+
+    return (rows as List<dynamic>)
+        .map(
+          (row) => StudentRecord(
+            id: row['id'] as String,
+            name: (row['name'] as String?) ?? 'Unnamed',
+            email: row['email'] as String?,
+          ),
+        )
+        .toList();
+  }
+}
+
+class AddStudentToClassParams {
+  final int classId;
+  final String studentId;
+
+  AddStudentToClassParams({required this.classId, required this.studentId});
 }
 
 class ClassRecord {
@@ -239,4 +310,12 @@ class ScheduleRecord {
     }
     return t;
   }
+}
+
+class StudentRecord {
+  final String id;
+  final String name;
+  final String? email;
+
+  StudentRecord({required this.id, required this.name, this.email});
 }
