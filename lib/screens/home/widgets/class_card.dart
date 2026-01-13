@@ -71,6 +71,14 @@ class _ClassCardState extends State<ClassCard> {
     return abbr;
   }
 
+  String _studentCountLabel() {
+    final count = widget.classRecord.studentCount;
+    if (count == null) return 'Students';
+    if (count == 0) return 'No students';
+    if (count == 1) return '1 student';
+    return '$count students';
+  }
+
   Future<void> _openDetail() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -203,7 +211,6 @@ class _ClassCardState extends State<ClassCard> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        // Students placeholder (no data in current service)
                         Icon(
                           Icons.group_outlined,
                           size: 16,
@@ -211,7 +218,7 @@ class _ClassCardState extends State<ClassCard> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'students',
+                          _studentCountLabel(),
                           style: TextStyle(color: Colors.grey.shade700),
                         ),
                         const Spacer(),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/adapters.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../services/class_service.dart';
 import 'class_icon_helper.dart';
@@ -35,6 +36,9 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
   String? _classIcon;
   late String _teacherId;
   List<StudentRecord> _addedStudents = [];
+  String? _removingStudentId;
+  Future<ClassSession?>? _sessionFuture;
+  int? _selectedScheduleId;
 
   @override
   void initState() {
@@ -42,6 +46,7 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
     _className = widget.className;
     _classIcon = widget.classIcon;
     _teacherId = widget.teacherId ?? '';
+    _sessionFuture = widget.classService.fetchActiveSession(widget.classId);
     _load();
   }
 
@@ -78,6 +83,9 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
       setState(() {
         _schedules = scheds;
         _addedStudents = students;
+        _selectedScheduleId ??= _schedules.isNotEmpty
+            ? _schedules.first.id
+            : null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -99,10 +107,97 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
     }
   }
 
+  void _refreshSession() {
+    setState(() {
+      _sessionFuture = widget.classService.fetchActiveSession(widget.classId);
+    });
+  }
+
+  Future<void> _createSession() async {
+    if (_schedules.isEmpty) {
+      _showSnack('Add a schedule first');
+      return;
+    }
+    final scheduleId = _selectedScheduleId ?? _schedules.first.id;
+    try {
+      setState(() {
+        _sessionFuture = widget.classService.createClassSession(
+          classId: widget.classId,
+          scheduleId: scheduleId,
+        );
+      });
+      await _sessionFuture;
+      _showSnack('Session started');
+    } catch (e) {
+      _showSnack('Failed to start session: $e');
+      _refreshSession();
+    }
+  }
+
+  Future<void> _closeSession() async {
+    try {
+      await widget.classService.closeActiveSession(widget.classId);
+    } catch (e) {
+      _showSnack('Failed to close session: $e');
+    } finally {
+      _refreshSession();
+    }
+  }
+
+  Future<void> _removeStudent(String studentId) async {
+    setState(() => _removingStudentId = studentId);
+    try {
+      await widget.classService.removeStudentFromClass(
+        classId: widget.classId,
+        studentId: studentId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _addedStudents = _addedStudents
+            .where((s) => s.id != studentId)
+            .toList();
+      });
+      _showSnack('Student removed');
+    } catch (e) {
+      if (mounted) _showSnack('Failed to remove: $e');
+    } finally {
+      if (mounted) setState(() => _removingStudentId = null);
+    }
+  }
+
+  Future<void> _confirmRemoveStudent(StudentRecord student) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove student?'),
+        content: Text('Remove ${student.name} from this class?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _removeStudent(student.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const accentColor = Color(0xFF0E58BC);
     final box = Hive.box('authBox');
+
+    final isTeacher =
+        box.get('role') == 'teacher' &&
+        box.get('sessionUser')['id'] == _teacherId;
 
     return Scaffold(
       appBar: AppBar(
@@ -111,6 +206,45 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
         elevation: 0,
         foregroundColor: Colors.black87,
       ),
+      floatingActionButton: isTeacher
+          ? FutureBuilder<ClassSession?>(
+              future: _sessionFuture,
+              builder: (context, snapshot) {
+                final hasActive = snapshot.data?.isActive == true;
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return FloatingActionButton(
+                    onPressed: null,
+                    backgroundColor: accentColor,
+                    child: const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                      ),
+                    ),
+                  );
+                }
+                if (hasActive) {
+                  return FloatingActionButton.extended(
+                    onPressed: _closeSession,
+                    backgroundColor: Colors.redAccent,
+                    icon: const Icon(Icons.lock_outline),
+                    label: const Text('Close Class'),
+                  );
+                }
+                return FloatingActionButton.extended(
+                  onPressed: _createSession,
+                  backgroundColor: accentColor,
+                  icon: const Icon(Icons.qr_code),
+                  label: const Text(
+                    'Start Session',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                );
+              },
+            )
+          : null,
       body: Container(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
@@ -194,12 +328,141 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _addedStudents.isEmpty
+                                        ? 'No students yet'
+                                        : '${_addedStudents.length} student(s)',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade700,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
                             const SizedBox(width: 8),
                           ],
                         ),
+                      ),
+                      const SizedBox(height: 18),
+                      FutureBuilder<ClassSession?>(
+                        future: _sessionFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: const [
+                                  SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Text('Loading session...'),
+                                ],
+                              ),
+                            );
+                          }
+                          if (snapshot.hasError) {
+                            return Text(
+                              'Session load failed',
+                              style: TextStyle(color: Colors.red.shade700),
+                            );
+                          }
+                          final session = snapshot.data;
+                          if (session == null || session.isActive != true) {
+                            return const SizedBox.shrink();
+                          }
+
+                          return Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.06),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: const [
+                                    Icon(
+                                      Icons.wifi_tethering,
+                                      color: accentColor,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Active Session',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade50,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: QrImageView(
+                                      data: session.attendanceCode,
+                                      size: 160,
+                                      eyeStyle: const QrEyeStyle(
+                                        eyeShape: QrEyeShape.square,
+                                        color: accentColor,
+                                      ),
+                                      dataModuleStyle: const QrDataModuleStyle(
+                                        dataModuleShape:
+                                            QrDataModuleShape.square,
+                                        color: Colors.black,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Code: ${session.attendanceCode}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Started at ${_prettyTime(session.startTime ?? '')}${session.sessionDate != null ? ' • ${session.sessionDate}' : ''}',
+                                  style: TextStyle(color: Colors.grey.shade700),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 18),
                       Text(
@@ -277,7 +540,7 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              '${s.start} - ${s.end}',
+                                              '${_prettyTime(s.start)} - ${_prettyTime(s.end)}',
                                               style: TextStyle(
                                                 color: Colors.grey.shade700,
                                                 fontWeight: FontWeight.w600,
@@ -314,6 +577,22 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                               ListTile(
                                 title: Text(student.name),
                                 subtitle: Text(student.email ?? ''),
+                                trailing: _removingStudentId == student.id
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.2,
+                                        ),
+                                      )
+                                    : IconButton(
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          color: Colors.redAccent,
+                                        ),
+                                        onPressed: () =>
+                                            _confirmRemoveStudent(student),
+                                      ),
                               ),
                             const SizedBox(height: 10),
                           ],
@@ -371,7 +650,6 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                                   ),
                                   label: const Text('Edit'),
                                 ),
-                                const SizedBox(height: 8),
                                 OutlinedButton.icon(
                                   onPressed: _deleting ? null : _confirmDelete,
                                   style: OutlinedButton.styleFrom(
@@ -408,6 +686,7 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                             ),
                           ],
                         ),
+                      const SizedBox(height: 100),
                     ],
                   ),
                 ),
@@ -474,6 +753,18 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
         _showSnack('Failed to delete: $e');
       }
     }
+  }
+
+  String _prettyTime(String raw) {
+    // raw may be '09:00' or '09:00:00'; fall back to raw on parse issues
+    final parts = raw.split(':');
+    if (parts.length < 2) return raw;
+    final hour = int.tryParse(parts[0]) ?? 0;
+    final minute = int.tryParse(parts[1]) ?? 0;
+    final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+    final suffix = hour >= 12 ? 'PM' : 'AM';
+    final minuteStr = minute.toString().padLeft(2, '0');
+    return '$hour12:$minuteStr $suffix';
   }
 
   void _showSnack(String msg) {

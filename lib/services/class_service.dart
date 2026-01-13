@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -47,7 +49,7 @@ class ClassService {
 
     final rows = await client
         .from('classes')
-        .select('id, name, icon, teacher_id, created_at')
+        .select('id, name, icon, teacher_id, created_at, class_students(count)')
         .eq('teacher_id', user.id)
         .order('created_at', ascending: false);
 
@@ -58,9 +60,20 @@ class ClassService {
             name: row['name'] as String,
             icon: row['icon'] as String?,
             teacherId: row['teacher_id'] as String?,
+            studentCount: _extractCount(row['class_students']),
           ),
         )
         .toList();
+  }
+
+  int? _extractCount(dynamic nested) {
+    if (nested is List && nested.isNotEmpty) {
+      final first = nested.first;
+      if (first is Map && first['count'] is int) {
+        return first['count'] as int;
+      }
+    }
+    return null;
   }
 
   // Cached fetch that avoids unnecessary network calls and tolerates failures.
@@ -233,6 +246,28 @@ class ClassService {
     }
   }
 
+  Future<void> removeStudentFromClass({
+    required int classId,
+    required String studentId,
+  }) async {
+    final user = client.auth.currentUser;
+    if (user == null) {
+      throw StateError('Not authenticated');
+    }
+
+    final response = await client
+        .from('class_students')
+        .delete()
+        .eq('class_id', classId)
+        .eq('student_id', studentId)
+        .select()
+        .maybeSingle();
+
+    if (response == null) {
+      throw Exception('Failed to remove student from class');
+    }
+  }
+
   Future<List<StudentRecord>> fetchClassStudents(int classId) async {
     final rows = await client.rpc(
       'get_class_students',
@@ -249,6 +284,97 @@ class ClassService {
         )
         .toList();
   }
+
+  Future<ClassSession?> fetchActiveSession(int classId) async {
+    final row = await client
+        .from('class_sessions')
+        .select(
+          'id, class_id, schedule_id, session_date, start_time, end_time, attendance_code, is_active, created_at',
+        )
+        .eq('class_id', classId)
+        .eq('is_active', true)
+        .order('created_at', ascending: false)
+        .maybeSingle();
+
+    if (row == null) return null;
+    return ClassSession(
+      id: row['id'] as int,
+      classId: row['class_id'] as int,
+      scheduleId: row['schedule_id'] as int?,
+      sessionDate: row['session_date'] as String?,
+      startTime: row['start_time'] as String?,
+      endTime: row['end_time'] as String?,
+      attendanceCode: row['attendance_code'] as String,
+      isActive: row['is_active'] as bool? ?? false,
+      createdAt: row['created_at'] as String?,
+    );
+  }
+
+  Future<ClassSession> createClassSession({
+    required int classId,
+    required int? scheduleId,
+  }) async {
+    final user = client.auth.currentUser;
+    if (user == null) {
+      throw StateError('Not authenticated');
+    }
+
+    final now = DateTime.now().toUtc();
+    final sessionDate = now.toIso8601String().split('T').first;
+    final startTime = _hhmmss(now);
+    final code = _randomCode();
+
+    final rows = await client
+        .from('class_sessions')
+        .insert({
+          'class_id': classId,
+          'schedule_id': scheduleId,
+          'session_date': sessionDate,
+          'start_time': startTime,
+          'end_time': null,
+          'attendance_code': code,
+          'is_active': true,
+        })
+        .select()
+        .single();
+
+    return ClassSession(
+      id: rows['id'] as int,
+      classId: rows['class_id'] as int,
+      scheduleId: rows['schedule_id'] as int?,
+      sessionDate: rows['session_date'] as String?,
+      startTime: rows['start_time'] as String?,
+      endTime: rows['end_time'] as String?,
+      attendanceCode: rows['attendance_code'] as String,
+      isActive: rows['is_active'] as bool? ?? false,
+      createdAt: rows['created_at'] as String?,
+    );
+  }
+
+  Future<void> closeActiveSession(int classId) async {
+    final now = DateTime.now().toUtc();
+    final endTime = _hhmmss(now);
+
+    await client
+        .from('class_sessions')
+        .update({'is_active': false, 'end_time': endTime})
+        .eq('class_id', classId)
+        .eq('is_active', true);
+  }
+
+  String _hhmmss(DateTime dt) {
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
+  }
+
+  String _randomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rand = Random.secure();
+    final length = 6 + rand.nextInt(3); // 6-8 chars
+    return List.generate(
+      length,
+      (_) => chars[rand.nextInt(chars.length)],
+    ).join();
+  }
 }
 
 class AddStudentToClassParams {
@@ -264,18 +390,21 @@ class ClassRecord {
     required this.name,
     this.icon,
     this.teacherId,
+    this.studentCount,
   });
 
   final int id;
   String name;
   String? icon;
   String? teacherId;
+  int? studentCount;
 
   Map<String, dynamic> toMap() => {
     'id': id,
     'name': name,
     'icon': icon,
     'teacher_id': teacherId,
+    'student_count': studentCount,
   };
 
   static ClassRecord fromMap(Map<String, dynamic> map) => ClassRecord(
@@ -283,6 +412,7 @@ class ClassRecord {
     name: map['name'] as String,
     icon: map['icon'] as String?,
     teacherId: map['teacher_id'] as String?,
+    studentCount: map['student_count'] as int?,
   );
 }
 
@@ -318,4 +448,28 @@ class StudentRecord {
   final String? email;
 
   StudentRecord({required this.id, required this.name, this.email});
+}
+
+class ClassSession {
+  final int id;
+  final int classId;
+  final int? scheduleId;
+  final String? sessionDate;
+  final String? startTime;
+  final String? endTime;
+  final String attendanceCode;
+  final bool isActive;
+  final String? createdAt;
+
+  ClassSession({
+    required this.id,
+    required this.classId,
+    this.scheduleId,
+    this.sessionDate,
+    this.startTime,
+    this.endTime,
+    required this.attendanceCode,
+    required this.isActive,
+    this.createdAt,
+  });
 }
