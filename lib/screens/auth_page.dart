@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/auth_store.dart';
 import '../services/profile_service.dart';
 import 'home_page.dart';
 import 'profile_setup_page.dart';
@@ -46,10 +46,7 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   Future<void> _persistUser(Session session) async {
-    final box = await Hive.openBox('userBox');
-    box.put('id', session.user.id);
-    box.put('email', session.user.email);
-    box.put('name', session.user.userMetadata?['full_name']);
+    await AuthStore.saveSessionUser(session);
   }
 
   Future<void> _signInWithEmail() async {
@@ -111,14 +108,13 @@ class _AuthPageState extends State<AuthPage> {
     _navigated = true;
     await _persistUser(session);
     final profile = await ProfileService.fetchProfile(session.user.id);
-    final box = await Hive.openBox('userBox');
     if (profile != null) {
-      box.put('role', profile.role);
-      box.put('profileComplete', true);
+      await AuthStore.setRole(profile.role);
+      await AuthStore.setProfileComplete(true);
       _goHome();
     } else {
-      box.put('profileComplete', false);
-      box.delete('role');
+      await AuthStore.setProfileComplete(false);
+      await AuthStore.clearRole();
       _goProfileSetup(
         session.user.id,
         session.user.email,

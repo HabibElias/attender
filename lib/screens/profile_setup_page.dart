@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 
+import '../services/auth_store.dart';
 import '../services/profile_service.dart';
 import 'home_page.dart';
 
@@ -36,9 +36,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         role: _selectedRole!,
       );
 
-      final box = await Hive.openBox('userBox');
-      box.put('role', profile.role);
-      box.put('profileComplete', true);
+      await AuthStore.setRole(profile.role);
+      await AuthStore.setProfileComplete(true);
 
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
