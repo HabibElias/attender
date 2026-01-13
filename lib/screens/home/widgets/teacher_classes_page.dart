@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/class_service.dart';
-import 'class_icon_helper.dart';
+import 'class_card.dart';
 
 class TeacherClassesPage extends StatefulWidget {
   const TeacherClassesPage({super.key, required this.classService});
@@ -29,7 +29,9 @@ class _TeacherClassesPageState extends State<TeacherClassesPage> {
       _error = null;
     });
     try {
-      final classes = await widget.classService.fetchTeacherClasses();
+      final classes = await widget.classService.getTeacherClasses(
+        forceRefresh: false,
+      );
       if (!mounted) return;
       setState(() => _classes = classes);
     } catch (e) {
@@ -40,7 +42,17 @@ class _TeacherClassesPageState extends State<TeacherClassesPage> {
     }
   }
 
-  Future<void> refresh() => _load();
+  Future<void> refresh() async {
+    try {
+      final classes = await widget.classService.getTeacherClasses(
+        forceRefresh: true,
+      );
+      if (!mounted) return;
+      setState(() => _classes = classes);
+    } catch (e) {
+      // keep existing list on error
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,54 +78,55 @@ class _TeacherClassesPageState extends State<TeacherClassesPage> {
     if (_classes.isEmpty) {
       return RefreshIndicator(
         onRefresh: refresh,
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: const [
-            SizedBox(height: 60),
-            Center(child: Text('No classes yet. Tap + to create one.')),
-          ],
+        displacement: 120,
+        color: Theme.of(context).colorScheme.onPrimary,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        strokeWidth: 3.0,
+        semanticsLabel: 'Pull to refresh',
+        child: Center(
+          child: Semantics(
+            label:
+                'No classes available. Use the add button to create your first class.',
+            child: Text('No classes yet. Tap + to create one.'),
+          ),
         ),
       );
     }
 
     return RefreshIndicator(
       onRefresh: refresh,
-      child: ListView.separated(
+      child: ListView(
         padding: const EdgeInsets.all(16),
-        itemCount: _classes.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
-        itemBuilder: (ctx, idx) {
-          final c = _classes[idx];
-          return Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: Theme.of(
-                  context,
-                ).colorScheme.primary.withOpacity(0.12),
-                child: Icon(
-                  classIconFor(c.icon),
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text(
+                'My Classes',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),
-              title: Text(
-                c.name,
-                style: const TextStyle(fontWeight: FontWeight.w700),
+              SizedBox(height: 4),
+              Text(
+                'Manage your active classes',
+                style: TextStyle(color: Colors.black54),
               ),
-              subtitle: Text(c.icon ?? 'No icon set'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ..._classes.map(
+            (c) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: ClassCard(
+                classService: widget.classService,
+                classRecord: c,
+                onChanged: () {
+                  // trigger refresh after edit/delete
+                  refresh();
+                },
+              ),
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
