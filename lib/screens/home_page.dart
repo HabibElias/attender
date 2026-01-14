@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../services/auth_store.dart';
+import 'home/student_home_page.dart';
+import 'home/teacher_home_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -10,9 +13,10 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  String? email;
-  String? name;
-  String? role;
+  String? _email;
+  String? _name;
+  String? _role;
+  bool _loading = true;
 
   @override
   void initState() {
@@ -21,63 +25,32 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadUser() async {
-    final box = await Hive.openBox('userBox');
+    final cached = await AuthStore.load();
     setState(() {
-      email = box.get('email') as String?;
-      name = box.get('name') as String?;
-      role = box.get('role') as String?;
+      _email = cached.email;
+      _name = cached.name;
+      _role = cached.role ?? 'student';
+      _loading = false;
     });
   }
 
   Future<void> _signOut() async {
     await Supabase.instance.client.auth.signOut();
-    final box = await Hive.openBox('userBox');
-    await box.clear();
+    await AuthStore.clear();
     if (!mounted) return;
     Navigator.of(context).pushReplacementNamed('/');
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Attender Home')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircleAvatar(
-                radius: 36,
-                backgroundColor: colors.primaryContainer,
-                child: Icon(
-                  Icons.person_outline,
-                  size: 42,
-                  color: colors.primary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                name ?? 'User',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 6),
-              Text(email ?? 'Email not available'),
-              if (role != null) ...[
-                const SizedBox(height: 6),
-                Text('Role: $role'),
-              ],
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: _signOut,
-                icon: const Icon(Icons.logout),
-                label: const Text('Sign out'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    final isTeacher = (_role ?? 'student') == 'teacher';
+
+    return isTeacher
+        ? TeacherHomePage(name: _name, email: _email, onSignOut: _signOut)
+        : StudentHomePage(name: _name, email: _email, onSignOut: _signOut);
   }
 }

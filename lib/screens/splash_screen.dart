@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:attender_new/services/auth_store.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -31,7 +32,7 @@ class _SplashScreenState extends State<SplashScreen>
     _scale = CurvedAnimation(parent: _controller, curve: Curves.easeOutBack);
     _controller.forward();
 
-    // Defer auth check to after first frame to avoid jank
+    // Defer auth check
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkSession());
   }
 
@@ -39,29 +40,43 @@ class _SplashScreenState extends State<SplashScreen>
     // Tiny delay to allow splash animation to be visible
     await Future.delayed(const Duration(milliseconds: 500));
 
+    // If we already have cached profile completion + role, trust it (offline safe)
+    final cached = await AuthStore.load();
+    if (cached.profileComplete && cached.role != null) {
+      _go(const HomePage());
+      return;
+    }
+
     final session = Supabase.instance.client.auth.currentSession;
 
     if (session != null) {
       // Persist basic user info (if not already stored)
-      final box = await Hive.openBox('userBox');
-      box.put('id', session.user.id);
-      box.put('email', session.user.email);
-      box.put('name', session.user.userMetadata?['full_name']);
-      // fetch profile from Supabase
+      await AuthStore.saveSessionUser(session);
+
+      final box = await Hive.openBox('authBox');
+
+      // If cached profileComplete is already true, go straight home.
+      if ((box.get('profileComplete') as bool?) == true &&
+          box.get('role') != null) {
+        _go(const HomePage());
+        return;
+      }
+
+      // Otherwise attempt to fetch profile; if network fails, stay in cached state.
       ProfileRecord? profile;
       try {
         profile = await ProfileService.fetchProfile(session.user.id);
-      } catch (e) {
+      } catch (_) {
         profile = null;
       }
-      // Navigate based on profile existence
+
       if (profile != null) {
-        box.put('role', profile.role);
-        box.put('profileComplete', true);
+        await AuthStore.setRole(profile.role);
+        await AuthStore.setProfileComplete(true);
         _go(const HomePage());
       } else {
-        box.put('profileComplete', false);
-        box.delete('role');
+        await AuthStore.setProfileComplete(false);
+        await AuthStore.clearRole();
         _go(
           ProfileSetupPage(
             userId: session.user.id,
@@ -73,8 +88,7 @@ class _SplashScreenState extends State<SplashScreen>
       return;
     }
 
-    // No session -> try read cached user for UX (optional)
-    await Hive.openBox('userBox');
+    // No session
     _go(const AuthPage());
   }
 

@@ -34,7 +34,11 @@ class AttenderApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final baseTextTheme = GoogleFonts.poppinsTextTheme();
     final theme = ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0E58BC)),
+      primaryColor: const Color(0xFF0E58BC),
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF0E58BC),
+        primary: const Color(0xFF0E58BC),
+      ),
       useMaterial3: true,
       fontFamily: GoogleFonts.poppins().fontFamily,
       textTheme: baseTextTheme.copyWith(
@@ -51,6 +55,7 @@ class AttenderApp extends StatelessWidget {
       title: 'Attender',
       theme: theme,
       home: const SplashScreen(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
