@@ -100,10 +100,12 @@ class _TeacherClassesPageState extends State<TeacherClassesPage> {
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text(
-                'My Classes',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                'Your Classes',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
               SizedBox(height: 4),
               Text(

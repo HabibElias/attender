@@ -288,6 +288,10 @@ class _ClassCardState extends State<ClassCard> {
               onPressed: _openDetail,
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: Colors.grey.shade300),
+                backgroundColor: accent.withOpacity(0.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               child: !_deleting
                   ? const Text('View Class')

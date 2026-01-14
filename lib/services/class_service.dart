@@ -351,6 +351,131 @@ class ClassService {
     );
   }
 
+  // Fetch recent sessions for all classes owned by the current teacher.
+  Future<List<ClassSession>> fetchTeacherSessions({
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    final classes = await fetchTeacherClasses();
+    final ids = classes.map((c) => c.id).toList();
+    if (ids.isEmpty) return [];
+
+    final List<ClassSession> out = [];
+    for (final classId in ids) {
+      var q = client
+          .from('class_sessions')
+          .select(
+            'id, class_id, schedule_id, session_date, start_time, end_time, attendance_code, is_active, created_at',
+          )
+          .eq('class_id', classId)
+          .order('session_date', ascending: false);
+
+      final rows = await q;
+      // ignore: dead_code, unnecessary_type_check
+      if (rows is! List) continue;
+      out.addAll(
+        (rows as List<dynamic>)
+            .map(
+              (row) => ClassSession(
+                id: row['id'] as int,
+                classId: row['class_id'] as int,
+                scheduleId: row['schedule_id'] as int?,
+                sessionDate: row['session_date'] as String?,
+                startTime: row['start_time'] as String?,
+                endTime: row['end_time'] as String?,
+                attendanceCode: row['attendance_code'] as String,
+                isActive: row['is_active'] as bool? ?? false,
+                createdAt: row['created_at'] as String?,
+              ),
+            )
+            .toList(),
+      );
+    }
+
+    // sort by date desc
+    out.sort((a, b) => (b.sessionDate ?? '').compareTo(a.sessionDate ?? ''));
+    return out;
+  }
+
+  // Try to count attendance records for a given session id. Returns 0 if none or on error.
+  Future<int> fetchSessionAttendanceCount(int sessionId) async {
+    try {
+      final rows = await client
+          .from('attendances')
+          .select('id')
+          .eq('session_id', sessionId);
+      return (rows as List).length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  // Fetch attendances for a session and return student records where possible.
+  Future<List<StudentRecord>> fetchSessionAttendances(int sessionId) async {
+    try {
+      // Try joining students if relation exists; fallback to student_id only.
+      final rows = await client
+          .from('attendances')
+          .select('student_id, students(id, name, email)')
+          .eq('session_id', sessionId);
+      final out = <StudentRecord>[];
+      for (final row in rows) {
+        if (row['students'] != null) {
+          final s = row['students'];
+          out.add(
+            StudentRecord(
+              id: s['id'] as String,
+              name: (s['name'] as String?) ?? 'Unnamed',
+              email: s['email'] as String?,
+            ),
+          );
+        } else if (row['student_id'] != null) {
+          out.add(
+            StudentRecord(
+              id: row['student_id'].toString(),
+              name: 'Student',
+              email: null,
+            ),
+          );
+        }
+      }
+      return out;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // Delete a single session by id.
+  Future<void> deleteSession(int sessionId) async {
+    await client.from('class_sessions').delete().eq('id', sessionId);
+  }
+
+  // Fetch sessions for a single class.
+  Future<List<ClassSession>> fetchSessionsForClass(int classId) async {
+    final rows = await client
+        .from('class_sessions')
+        .select(
+          'id, class_id, schedule_id, session_date, start_time, end_time, attendance_code, is_active, created_at',
+        )
+        .eq('class_id', classId)
+        .order('session_date', ascending: false);
+    return (rows as List<dynamic>)
+        .map(
+          (row) => ClassSession(
+            id: row['id'] as int,
+            classId: row['class_id'] as int,
+            scheduleId: row['schedule_id'] as int?,
+            sessionDate: row['session_date'] as String?,
+            startTime: row['start_time'] as String?,
+            endTime: row['end_time'] as String?,
+            attendanceCode: row['attendance_code'] as String,
+            isActive: row['is_active'] as bool? ?? false,
+            createdAt: row['created_at'] as String?,
+          ),
+        )
+        .toList();
+  }
+
   Future<void> closeActiveSession(int classId) async {
     final now = DateTime.now().toUtc();
     final endTime = _hhmmss(now);

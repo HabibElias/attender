@@ -6,6 +6,8 @@ import '../../../services/class_service.dart';
 import 'class_icon_helper.dart';
 import 'edit_class_sheet.dart';
 import 'add_students_page.dart';
+import 'manage_session_detail_page.dart';
+import 'manage_class_sessions_page.dart';
 
 class ClassDetailPage extends StatefulWidget {
   const ClassDetailPage({
@@ -113,12 +115,63 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
     });
   }
 
-  Future<void> _createSession() async {
+  Future<void> _closeSession() async {
+    try {
+      await widget.classService.closeActiveSession(widget.classId);
+    } catch (e) {
+      _showSnack('Failed to close session: $e');
+    } finally {
+      _refreshSession();
+    }
+  }
+
+  Future<void> _openSchedulePicker() async {
     if (_schedules.isEmpty) {
-      _showSnack('Add a schedule first');
+      // fallback to previous behavior
+      await _startSessionWithSchedule(null);
       return;
     }
-    final scheduleId = _selectedScheduleId ?? _schedules.first.id;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.flash_on),
+                title: const Text('Start session without schedule'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _startSessionWithSchedule(null);
+                },
+              ),
+              const Divider(height: 1),
+              ..._schedules.map((s) {
+                return ListTile(
+                  leading: const Icon(Icons.calendar_today_outlined),
+                  title: Text(
+                    '${s.day} • ${_prettyTime(s.start)} - ${_prettyTime(s.end)}',
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _confirmCreateForSchedule(s);
+                  },
+                );
+              }),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _startSessionWithSchedule(int? scheduleId) async {
     try {
       setState(() {
         _sessionFuture = widget.classService.createClassSession(
@@ -134,13 +187,29 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
     }
   }
 
-  Future<void> _closeSession() async {
-    try {
-      await widget.classService.closeActiveSession(widget.classId);
-    } catch (e) {
-      _showSnack('Failed to close session: $e');
-    } finally {
-      _refreshSession();
+  Future<void> _confirmCreateForSchedule(ScheduleRecord s) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Create session'),
+        content: Text(
+          'Create session for ${s.day} • ${_prettyTime(s.start)} - ${_prettyTime(s.end)}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _startSessionWithSchedule(s.id);
     }
   }
 
@@ -234,7 +303,7 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                   );
                 }
                 return FloatingActionButton.extended(
-                  onPressed: _createSession,
+                  onPressed: _openSchedulePicker,
                   backgroundColor: accentColor,
                   icon: const Icon(Icons.qr_code),
                   label: const Text(
@@ -391,75 +460,118 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                             return const SizedBox.shrink();
                           }
 
-                          return Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.06),
-                                  blurRadius: 14,
-                                  offset: const Offset(0, 8),
+                          return InkWell(
+                            onTap: () async {
+                              final nav = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ManageSessionDetailPage(
+                                    classService: widget.classService,
+                                    session: session,
+                                  ),
                                 ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: const [
-                                    Icon(
-                                      Icons.wifi_tethering,
-                                      color: accentColor,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Active Session',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Center(
-                                  child: Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.shade50,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: QrImageView(
-                                      data: session.attendanceCode,
-                                      size: 160,
-                                      eyeStyle: const QrEyeStyle(
-                                        eyeShape: QrEyeShape.square,
+                              );
+                              if (nav == true) _refreshSession();
+                            },
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.06),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: const [
+                                      Icon(
+                                        Icons.wifi_tethering,
                                         color: accentColor,
                                       ),
-                                      dataModuleStyle: const QrDataModuleStyle(
-                                        dataModuleShape:
-                                            QrDataModuleShape.square,
-                                        color: Colors.black,
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Active Session',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Center(
+                                    child: Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade50,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: QrImageView(
+                                        data: session.attendanceCode,
+                                        size: 140,
+                                        eyeStyle: const QrEyeStyle(
+                                          eyeShape: QrEyeShape.square,
+                                          color: accentColor,
+                                        ),
+                                        dataModuleStyle:
+                                            const QrDataModuleStyle(
+                                              dataModuleShape:
+                                                  QrDataModuleShape.square,
+                                              color: Colors.black,
+                                            ),
                                       ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Code: ${session.attendanceCode}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.start,
+                                    children: [
+                                      ElevatedButton.icon(
+                                        onPressed: () async {
+                                          final nav = await Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  ManageSessionDetailPage(
+                                                    classService:
+                                                        widget.classService,
+                                                    session: session,
+                                                  ),
+                                            ),
+                                          );
+                                          if (nav == true) _refreshSession();
+                                        },
+                                        icon: const Icon(Icons.manage_search),
+                                        label: const Text('Manage Session'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: accentColor,
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Started at ${_prettyTime(session.startTime ?? '')}${session.sessionDate != null ? ' • ${session.sessionDate}' : ''}',
-                                  style: TextStyle(color: Colors.grey.shade700),
-                                ),
-                              ],
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Started at ${_prettyTime(session.startTime ?? '')}${session.sessionDate != null ? ' • ${session.sessionDate}' : ''}',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           );
                         },
@@ -495,65 +607,69 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                         Column(
                           children: _schedules
                               .map(
-                                (s) => Container(
-                                  margin: const EdgeInsets.only(bottom: 10),
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(14),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.05),
-                                        blurRadius: 12,
-                                        offset: const Offset(0, 6),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 44,
-                                        height: 44,
-                                        decoration: BoxDecoration(
-                                          color: accentColor.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
+                                (s) => InkWell(
+                                  onTap: () => _confirmCreateForSchedule(s),
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 10),
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(14),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          blurRadius: 12,
+                                          offset: const Offset(0, 6),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 44,
+                                          height: 44,
+                                          decoration: BoxDecoration(
+                                            color: accentColor.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          child: const Icon(
+                                            Icons.calendar_today_outlined,
+                                            color: accentColor,
                                           ),
                                         ),
-                                        child: const Icon(
-                                          Icons.calendar_today_outlined,
-                                          color: accentColor,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              s.day,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 16,
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                s.day,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 16,
+                                                ),
                                               ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              '${_prettyTime(s.start)} - ${_prettyTime(s.end)}',
-                                              style: TextStyle(
-                                                color: Colors.grey.shade700,
-                                                fontWeight: FontWeight.w600,
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                '${_prettyTime(s.start)} - ${_prettyTime(s.end)}',
+                                                style: TextStyle(
+                                                  color: Colors.grey.shade700,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                      const Icon(
-                                        Icons.chevron_right_rounded,
-                                        color: Colors.black45,
-                                      ),
-                                    ],
+                                        const Icon(
+                                          Icons.chevron_right_rounded,
+                                          color: Colors.black45,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               )
@@ -609,7 +725,8 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                                   ?.copyWith(fontWeight: FontWeight.w700),
                             ),
                             const SizedBox(height: 10),
-                            Row(
+                            Wrap(
+                              alignment: WrapAlignment.start,
                               spacing: 12,
                               children: [
                                 ElevatedButton.icon(
@@ -630,6 +747,36 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                                     size: 18,
                                   ),
                                   label: const Text('Add Students'),
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ManageClassSessionsPage(
+                                          classService: widget.classService,
+                                          classId: widget.classId,
+                                          className: _className,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: accentColor,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.calendar_month,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Manage Sessions'),
                                 ),
                                 ElevatedButton.icon(
                                   onPressed: _openEditSheet,

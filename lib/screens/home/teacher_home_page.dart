@@ -6,6 +6,7 @@ import '../../services/class_service.dart';
 import 'widgets/create_class_sheet.dart';
 import 'widgets/teacher_classes_page.dart';
 import 'widgets/teacher_overview.dart';
+import 'widgets/manage_sessions_page.dart';
 
 class TeacherHomePage extends StatefulWidget {
   final String? name;
@@ -45,7 +46,7 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
     _TabConfig(
       label: 'Manage',
       icon: Icons.dashboard_customize_outlined,
-      content: const PlaceholderTab(label: 'Manage'),
+      content: ManageSessionsPage(classService: _classService),
     ),
     _TabConfig(
       label: 'Profile',
@@ -91,7 +92,11 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreateClassSheet,
         icon: const Icon(Icons.add),
-        label: const Text('New Class'),
+        label: const Text(
+          'New Class',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        backgroundColor: primary,
       ),
     );
   }
