@@ -32,12 +32,12 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
   List<_TabConfig> get _tabs => [
     _TabConfig(
       label: 'Home',
-      icon: Icons.home_outlined,
+      icon: Icons.home_rounded,
       content: TeacherOverview(onSignOut: widget.onSignOut),
     ),
     _TabConfig(
       label: 'Classes',
-      icon: Icons.menu_book_outlined,
+      icon: Icons.class_outlined,
       content: TeacherClassesPage(
         key: _classesKey,
         classService: _classService,

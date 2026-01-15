@@ -308,7 +308,7 @@ class _EditClassSheetState extends State<EditClassSheet> {
                   ],
                 ),
               );
-            }).toList(),
+            }),
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerLeft,

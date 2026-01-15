@@ -99,7 +99,7 @@ class _ManageSessionsPageState extends State<ManageSessionsPage> {
       last = _calendarStart.add(const Duration(days: 29));
     }
 
-    final initial = _selectedDate ?? first ?? DateTime.now();
+    final initial = _selectedDate ?? first;
     // Clamp initial into bounds
     DateTime initialClamped = initial;
     if (initialClamped.isBefore(first)) initialClamped = first;

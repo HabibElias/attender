@@ -191,7 +191,7 @@ class _AddStudentsSheetState extends State<AddStudentsSheet> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: _results.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   final s = _results[index];
                   final adding = _addingStudentId == s.id;

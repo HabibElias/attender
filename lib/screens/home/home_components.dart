@@ -1,4 +1,6 @@
+import 'package:avatar_plus/avatar_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
 
 class StatCard extends StatelessWidget {
   final String label;
@@ -261,6 +263,7 @@ class ProfileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final box = Hive.box('authBox');
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -281,11 +284,30 @@ class ProfileCard extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircleAvatar(
-                radius: 38,
-                backgroundColor: colors.primary.withOpacity(0.1),
-                child: Icon(Icons.person, color: colors.primary, size: 32),
-              ),
+              box.get('sessionUser')['user_metadata']['avatar_url'] != null
+                  ? CircleAvatar(
+                      radius: 50,
+                      backgroundColor: Colors.transparent,
+                      child: ClipOval(
+                        child: Image.network(
+                          box.get('sessionUser')['user_metadata']['avatar_url'],
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              AvatarPlus(
+                                box.get('name').toString(),
+                                height: 100,
+                                width: 100,
+                              ),
+                        ),
+                      ),
+                    )
+                  : AvatarPlus(
+                      box.get('name').toString(),
+                      height: 50,
+                      width: 50,
+                    ),
               const SizedBox(height: 12),
               Text(
                 name ?? 'User',
