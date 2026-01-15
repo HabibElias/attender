@@ -104,8 +104,9 @@ class AuthStore {
     final meta = raw['user_metadata'];
     if (meta is Map<String, dynamic>) {
       final fullName = meta['full_name'] as String?;
-      if (fullName != null && fullName.trim().isNotEmpty)
+      if (fullName != null && fullName.trim().isNotEmpty) {
         return fullName.trim();
+      }
       final first = meta['first_name'] as String?;
       final last = meta['last_name'] as String?;
       final combined = [first, last].whereType<String>().join(' ').trim();

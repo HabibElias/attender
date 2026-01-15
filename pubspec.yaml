@@ -42,6 +42,7 @@ dependencies:
   avatar_plus: ^0.0.5
   qr_flutter: ^4.1.0
   table_calendar: ^3.0.8
+  mobile_scanner: ^6.0.2
 
 dev_dependencies:
   flutter_test:

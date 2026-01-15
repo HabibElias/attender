@@ -145,7 +145,7 @@ class _ManageSessionDetailPageState extends State<ManageSessionDetailPage> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: QrImageView(
-                                data: widget.session.attendanceCode,
+                                data: widget.session.attendanceCode ?? "",
                                 size: 160,
                                 eyeStyle: QrEyeStyle(
                                   eyeShape: QrEyeShape.square,

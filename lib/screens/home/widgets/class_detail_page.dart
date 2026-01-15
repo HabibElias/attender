@@ -515,7 +515,7 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: QrImageView(
-                                        data: session.attendanceCode,
+                                        data: session.attendanceCode ?? "",
                                         size: 140,
                                         eyeStyle: const QrEyeStyle(
                                           eyeShape: QrEyeShape.square,
