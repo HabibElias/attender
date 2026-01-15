@@ -340,6 +340,16 @@ class _SignUpPageState extends State<SignUpPage> {
                                 Image.network(
                                   'http://pngimg.com/uploads/google/google_PNG19635.png',
                                   fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.error,
+                                            color: Colors.red,
+                                          ),
+                                          const SizedBox(width: 20),
+                                        ],
+                                      ),
                                 ),
                                 Text(
                                   'Continue with Google',

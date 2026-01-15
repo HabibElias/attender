@@ -175,3 +175,62 @@ class StudentDashboardStats {
     );
   }
 }
+
+class TeacherDashboardStats {
+  const TeacherDashboardStats({
+    required this.totalStudents,
+    required this.presentToday,
+    required this.absentToday,
+    required this.attendanceRate,
+  });
+
+  final int totalStudents;
+  final int presentToday;
+  final int absentToday;
+  final double attendanceRate; // 0..1
+
+  int get totalMarkedToday => presentToday + absentToday;
+  double get attendancePercent => attendanceRate * 100;
+
+  factory TeacherDashboardStats.fromMap(Map<String, dynamic> map) {
+    int asInt(dynamic v) => v is int
+        ? v
+        : v is num
+        ? v.toInt()
+        : int.tryParse('$v') ?? 0;
+    double asDouble(dynamic v) => v is double
+        ? v
+        : v is num
+        ? v.toDouble()
+        : double.tryParse('$v') ?? 0;
+
+    return TeacherDashboardStats(
+      totalStudents: asInt(map['total_students']),
+      presentToday: asInt(map['present_today']),
+      absentToday: asInt(map['absent_today']),
+      attendanceRate: asDouble(map['attendance_rate']),
+    );
+  }
+}
+
+class TeacherRecentSessionSummary {
+  const TeacherRecentSessionSummary({
+    required this.sessionId,
+    required this.classId,
+    required this.className,
+    required this.classIcon,
+    required this.sessionDate,
+    required this.startTime,
+    required this.presentCount,
+    required this.totalStudents,
+  });
+
+  final int sessionId;
+  final int classId;
+  final String className;
+  final String? classIcon;
+  final String? sessionDate; // yyyy-mm-dd
+  final String? startTime; // HH:mm:ss or HH:mm
+  final int presentCount;
+  final int totalStudents;
+}

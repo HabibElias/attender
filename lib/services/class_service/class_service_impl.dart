@@ -243,6 +243,20 @@ class ClassService {
     throw StateError('No dashboard stats available');
   }
 
+  Future<TeacherDashboardStats> fetchTeacherDashboardStats() async {
+    _requireUser();
+    final rows = await client.rpc('get_teacher_dashboard_stats');
+
+    if (rows is List && rows.isNotEmpty) {
+      final first = rows.first;
+      if (first is Map<String, dynamic>) {
+        return TeacherDashboardStats.fromMap(first);
+      }
+    }
+
+    throw StateError('No dashboard stats available');
+  }
+
   // -----------------------------
   // Class create/update/delete
   // -----------------------------
@@ -498,6 +512,67 @@ class ClassService {
     }
 
     out.sort((a, b) => (b.sessionDate ?? '').compareTo(a.sessionDate ?? ''));
+    return out;
+  }
+
+  Future<List<TeacherRecentSessionSummary>> fetchTeacherRecentSessions({
+    int limit = 3,
+  }) async {
+    _requireUser();
+
+    final classes = await fetchTeacherClasses();
+    final ids = classes.map((c) => c.id).toList();
+    if (ids.isEmpty) return const [];
+
+    final rows = await client
+        .from('class_sessions')
+        .select(
+          'id, class_id, session_date, start_time, created_at, classes(id, name, icon, class_students(count)), attendance(count)',
+        )
+        .inFilter('class_id', ids)
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    final out = <TeacherRecentSessionSummary>[];
+    for (final raw in (rows as List<dynamic>)) {
+      final row = raw as Map<String, dynamic>;
+
+      final classId = row['class_id'] as int;
+
+      String className = 'Class';
+      String? classIcon;
+      int totalStudents = 0;
+
+      final classObj = row['classes'];
+      if (classObj is Map<String, dynamic>) {
+        className = (classObj['name'] as String?) ?? className;
+        classIcon = classObj['icon'] as String?;
+        totalStudents = _extractCount(classObj['class_students']) ?? 0;
+      } else if (classObj is List && classObj.isNotEmpty) {
+        final first = classObj.first;
+        if (first is Map<String, dynamic>) {
+          className = (first['name'] as String?) ?? className;
+          classIcon = first['icon'] as String?;
+          totalStudents = _extractCount(first['class_students']) ?? 0;
+        }
+      }
+
+      final presentCount = _extractCount(row['attendance']) ?? 0;
+
+      out.add(
+        TeacherRecentSessionSummary(
+          sessionId: row['id'] as int,
+          classId: classId,
+          className: className,
+          classIcon: classIcon,
+          sessionDate: row['session_date'] as String?,
+          startTime: row['start_time'] as String?,
+          presentCount: presentCount,
+          totalStudents: totalStudents,
+        ),
+      );
+    }
+
     return out;
   }
 

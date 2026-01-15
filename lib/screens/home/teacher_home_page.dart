@@ -29,11 +29,22 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
   late final ClassService _classService;
   final GlobalKey _classesKey = GlobalKey();
 
+  bool _statsLoading = true;
+  String? _statsError;
+  TeacherDashboardStats? _stats;
+
   List<_TabConfig> get _tabs => [
     _TabConfig(
       label: 'Home',
       icon: Icons.home_rounded,
-      content: TeacherOverview(onSignOut: widget.onSignOut),
+      content: TeacherOverview(
+        onSignOut: widget.onSignOut,
+        classService: _classService,
+        stats: _stats,
+        statsLoading: _statsLoading,
+        statsError: _statsError,
+        onRefresh: () => _loadStats(forceRefresh: true),
+      ),
     ),
     _TabConfig(
       label: 'Classes',
@@ -64,6 +75,25 @@ class _TeacherHomePageState extends State<TeacherHomePage> {
   void initState() {
     super.initState();
     _classService = ClassService(Supabase.instance.client);
+    _loadStats();
+  }
+
+  Future<void> _loadStats({bool forceRefresh = false}) async {
+    setState(() {
+      _statsLoading = true;
+      _statsError = null;
+    });
+
+    try {
+      final data = await _classService.fetchTeacherDashboardStats();
+      if (!mounted) return;
+      setState(() => _stats = data);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _statsError = e.toString());
+    } finally {
+      if (mounted) setState(() => _statsLoading = false);
+    }
   }
 
   @override
